@@ -53,33 +53,46 @@ export const GlobalContextProvider = ({ children }) => {
 
   //* Set the wallet address to the state
   const updateCurrentWalletAddress = async () => {
-    const accounts = await window?.ethereum?.request({ method: 'eth_requestAccounts' });
+    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
 
     if (accounts) setWalletAddress(accounts[0]);
   };
 
   useEffect(() => {
-    updateCurrentWalletAddress();
-
-    window?.ethereum?.on('accountsChanged', updateCurrentWalletAddress);
-  }, []);
-
-  //* Set the smart contract and provider to the state
-  useEffect(() => {
-    const setSmartContractAndProvider = async () => {
-      const web3Modal = new Web3Modal();
-      const connection = await web3Modal.connect();
-      const newProvider = new ethers.providers.Web3Provider(connection);
-      const signer = newProvider.getSigner();
-      const newContract = new ethers.Contract(ADDRESS, ABI, signer);
-
-      setProvider(newProvider);
-      setContract(newContract);
+    const handleAccountsChanged = (accounts) => {
+      if (accounts.length > 0) setWalletAddress(accounts[0]);
+      else setWalletAddress('');
     };
-
-    setSmartContractAndProvider();
-  }, []);
-
+  
+    const init = async () => {
+      try {
+        const web3Modal = new Web3Modal();
+        const connection = await web3Modal.connect();
+        const newProvider = new ethers.providers.Web3Provider(connection);
+        const signer = newProvider.getSigner();
+        const newContract = new ethers.Contract(ADDRESS, ABI, signer);
+  
+        const accounts = await newProvider.listAccounts();
+        if (accounts.length > 0) setWalletAddress(accounts[0]);
+  
+        setProvider(newProvider);
+        setContract(newContract);
+  
+        window.ethereum.on('accountsChanged', handleAccountsChanged);
+      } catch (err) {
+        console.error('Wallet connect error:', err);
+      }
+    };
+  
+    init();
+  
+    return () => {
+      if (window.ethereum?.removeListener) {
+        window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
+      }
+    };
+  }, []); // <-- run only once on mount
+  
   //* Activate event listeners for the smart contract
   useEffect(() => {
     if (step === -1 && contract) {
